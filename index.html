@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>寻宝任务 · RPG Edition</title>
+    
+    <!-- 引入 Tailwind CSS 样式库 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 引入 React 和 ReactDOM (用于本地运行) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 引入 Babel (用于在浏览器中解析 React 代码) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 引入 SheetJS (用于解析 Excel 文件) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+        /* 隐藏滚动条但保留滚动功能，让界面更像APP */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(210, 180, 140, 0.3); border-radius: 4px; }
+        body { -webkit-tap-highlight-color: transparent; }
+    </style>
+</head>
+<body class="bg-[#1c140f]">
+    <!-- React 挂载点 -->
+    <div id="root"></div>
+
+    <!-- 核心逻辑与界面代码 -->
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- 1. 内置 SVG 图标组件 (替代 lucide-react) ---
+        const Icon = ({ className, children }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+        const ArrowLeft = ({className}) => <Icon className={className}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></Icon>;
+        const Coins = ({className}) => <Icon className={className}><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></Icon>;
+        const Scroll = ({className}) => <Icon className={className}><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/></Icon>;
+        const MapIcon = ({className}) => <Icon className={className}><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></Icon>;
+        const Sparkles = ({className}) => <Icon className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></Icon>;
+        const Sword = ({className}) => <Icon className={className}><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="20" x2="20" y2="16"/><line x1="19" y1="21" x2="21" y2="19"/></Icon>;
+        const Trophy = ({className}) => <Icon className={className}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></Icon>;
+        const AlertCircle = ({className}) => <Icon className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Icon>;
+        const ShieldAlert = ({className}) => <Icon className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="M12 8v4"/><path d="M12 16h.01"/></Icon>;
+        const UserPlus = ({className}) => <Icon className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></Icon>;
+        const Landmark = ({className}) => <Icon className={className}><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/></Icon>;
+        const Loader2 = ({className}) => <Icon className={className}><path d="M21 12a9 9 0 1 1-6.219-8.56"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></path></Icon>;
+
+        // --- 2. 典藏版 RPG SVG 插画 ---
+        const IllustrationMap = () => (
+          <svg viewBox="0 0 400 200" className="w-full h-full object-cover opacity-95">
+            <defs>
+              <linearGradient id="wood" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#3e2723" />
+                <stop offset="100%" stopColor="#1b100b" />
+              </linearGradient>
+              <linearGradient id="parch" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#f5e6d3" />
+                <stop offset="100%" stopColor="#d2b48c" />
+              </linearGradient>
+            </defs>
+            <rect width="400" height="200" fill="url(#wood)" />
+            <path d="M 100 0 L 120 200 M 250 0 L 280 200" stroke="#110a07" strokeWidth="5" opacity="0.8" />
+            <path d="M 40 40 Q 200 10 360 40 L 370 160 Q 200 190 30 160 Z" fill="url(#parch)" />
+            <path d="M 80 80 Q 150 120 200 80 T 320 120" fill="none" stroke="#8b5a2b" strokeWidth="2" opacity="0.6" strokeDasharray="6,6" />
+            <path d="M 120 60 L 150 90 M 280 140 L 250 110" fill="none" stroke="#8b5a2b" strokeWidth="2" opacity="0.4" />
+            <text x="270" y="140" fontSize="45" fill="#8b0000" fontWeight="bold" fontFamily="serif">X</text>
+            <path d="M 120 150 Q 140 180 110 200 M 120 150 Q 100 180 140 190" fill="none" stroke="#d4af37" strokeWidth="6" />
+            <circle cx="120" cy="130" r="28" fill="#8b0000" />
+            <circle cx="120" cy="130" r="22" fill="none" stroke="#b71c1c" strokeWidth="2" />
+            <text x="108" y="142" fontSize="26" fill="#ffcdd2" fontFamily="serif">☠</text>
+          </svg>
+        );
+
+        const IllustrationAltar = () => (
+          <svg viewBox="0 0 400 200" className="w-full h-full object-cover opacity-95">
+            <defs>
+              <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#00ffff" stopOpacity="0.7" />
+                <stop offset="100%" stopColor="#061a14" stopOpacity="0" />
+              </radialGradient>
+              <linearGradient id="stone" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#4a5d4e" />
+                <stop offset="100%" stopColor="#1f2b23" />
+              </linearGradient>
+            </defs>
+            <rect width="400" height="200" fill="#061a14" />
+            <path d="M 0 200 L 50 50 L 80 200 M 320 200 L 350 40 L 400 200" fill="#0d2419" />
+            <path d="M 0 0 Q 100 50 150 0 M 400 0 Q 300 80 250 0" fill="none" stroke="#1f4027" strokeWidth="8" />
+            <path d="M 80 200 L 320 200 L 280 150 L 120 150 Z" fill="url(#stone)" />
+            <path d="M 120 150 L 280 150 L 250 100 L 150 100 Z" fill="#2d3d32" />
+            <rect x="160" y="40" width="80" height="80" fill="url(#stone)" rx="6" />
+            <circle cx="200" cy="80" r="80" fill="url(#glow)" />
+            <text x="184" y="98" fontSize="45" fill="#e0ffff" fontFamily="serif">R</text>
+          </svg>
+        );
+
+        const IllustrationDragon = () => (
+          <svg viewBox="0 0 400 200" className="w-full h-full object-cover opacity-95">
+            <defs>
+              <radialGradient id="goldGlow" cx="50%" cy="80%" r="70%">
+                <stop offset="0%" stopColor="#ffb300" />
+                <stop offset="100%" stopColor="#3e2723" />
+              </radialGradient>
+              <linearGradient id="dragonScale" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#1e293b" />
+                <stop offset="100%" stopColor="#020617" />
+              </linearGradient>
+            </defs>
+            <rect width="400" height="200" fill="#1a110d" />
+            <path d="M 30 200 Q 200 30 370 200 Z" fill="url(#goldGlow)" />
+            <circle cx="180" cy="140" r="7" fill="#ffd700" />
+            <circle cx="210" cy="130" r="6" fill="#ffc107" />
+            <circle cx="230" cy="150" r="8" fill="#ffe082" />
+            <circle cx="160" cy="160" r="5" fill="#ffca28" />
+            <circle cx="260" cy="170" r="9" fill="#ffd700" />
+            <polygon points="120,180 130,170 145,175 135,190" fill="#e53e3e" />
+            <polygon points="280,150 295,145 305,160 290,165" fill="#3b82f6" />
+            <polygon points="190,180 205,170 220,185 200,195" fill="#10b981" />
+            <path d="M 0 200 Q 100 80 250 160 T 400 180" fill="none" stroke="url(#dragonScale)" strokeWidth="40" strokeLinecap="round" />
+            <path d="M 0 200 Q 100 80 250 160 T 400 180" fill="none" stroke="#334155" strokeWidth="40" strokeLinecap="round" strokeDasharray="12,6" opacity="0.3" />
+          </svg>
+        );
+
+        const IllustrationBank = () => (
+          <svg viewBox="0 0 400 200" className="w-full h-full object-cover opacity-95">
+            <defs>
+              <linearGradient id="wall" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#1e293b" />
+                <stop offset="100%" stopColor="#0f172a" />
+              </linearGradient>
+              <linearGradient id="goldVault" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#f59e0b" />
+                <stop offset="100%" stopColor="#78350f" />
+              </linearGradient>
+            </defs>
+            <rect width="400" height="200" fill="url(#wall)" />
+            <path d="M 0 50 L 400 50 M 0 100 L 400 100 M 0 150 L 400 150" stroke="#020617" strokeWidth="2" opacity="0.6" />
+            <path d="M 100 0 L 100 50 M 300 0 L 300 50 M 200 50 L 200 100 M 50 100 L 50 150 M 250 100 L 250 150" stroke="#020617" strokeWidth="2" opacity="0.6" />
+            <circle cx="200" cy="100" r="80" fill="#334155" stroke="#0f172a" strokeWidth="10" />
+            <circle cx="200" cy="100" r="60" fill="#475569" />
+            <circle cx="200" cy="100" r="45" fill="url(#goldVault)" />
+            <path d="M 155 100 L 245 100 M 200 55 L 200 145 M 168 68 L 232 132 M 168 132 L 232 68" stroke="#1e293b" strokeWidth="7" />
+            <circle cx="200" cy="100" r="18" fill="#0f172a" />
+            <text x="188" y="112" fontSize="32" fill="#fbbf24" fontWeight="bold" fontFamily="serif">$</text>
+          </svg>
+        );
+
+        // --- 3. 核心应用逻辑 ---
+        const App = () => {
+          const [view, setView] = useState('start');
+          const [configFiles, setConfigFiles] = useState({ config: null, data: null });
+          const [errorMsg, setErrorMsg] = useState('');
+          const [results, setResults] = useState({
+            noMoney: [],      
+            moneyWrong: [],   
+            nameWrong: [],    
+            bankTransfer: []  
+          });
+          const [loading, setLoading] = useState(false);
+
+          const cleanAmount = (val) => {
+            if (val === undefined || val === null || val === "") return 0;
+            if (typeof val === 'number') return val;
+            const cleaned = String(val).replace(/[^0-9.-]+/g, "");
+            return parseFloat(cleaned) || 0;
+          };
+
+          const handleFileChange = (e, type) => {
+            const file = e.target.files[0];
+            if (file) {
+              setConfigFiles(prev => ({ ...prev, [type]: file }));
+              setErrorMsg('');
+            }
+          };
+
+          const executeQuest = async () => {
+            if (!window.XLSX) {
+                setErrorMsg("魔法法阵加载中，请稍后再试...");
+                return;
+            }
+            if (!configFiles.config || !configFiles.data) {
+              setErrorMsg("勇者，请将两卷秘籍均放置于法阵中！");
+              return;
+            }
+
+            setLoading(true);
+            try {
+              const readBuffer = (file) => new Promise((res, rej) => {
+                const r = new FileReader();
+                r.onload = (e) => res(e.target.result);
+                r.onerror = rej;
+                r.readAsArrayBuffer(file);
+              });
+
+              const [cBuf, dBuf] = await Promise.all([
+                readBuffer(configFiles.config),
+                readBuffer(configFiles.data)
+              ]);
+
+              const XLSX = window.XLSX;
+              const cWb = XLSX.read(cBuf, { type: 'buffer' });
+              const dWb = XLSX.read(dBuf, { type: 'buffer' });
+
+              const cData = XLSX.utils.sheet_to_json(cWb.Sheets[cWb.SheetNames[0]], { header: 1 });
+              const dData = XLSX.utils.sheet_to_json(dWb.Sheets[dWb.SheetNames[0]], { header: 1 });
+
+              const configMap = new Map();
+              const bankList = [];
+
+              cData.forEach(row => {
+                if (!row || !row[0]) return;
+                const name = String(row[0]).trim();
+                const amount = cleanAmount(row[1]);
+                const isBank = String(row[2] || "").includes("银行转账");
+                if (isBank) {
+                  bankList.push(`${name}：${amount}`);
+                } else {
+                  configMap.set(name, amount);
+                }
+              });
+
+              const dataMap = new Map();
+              for (let i = 17; i < dData.length; i++) {
+                const row = dData[i];
+                if (!row || row.length < 6) continue;
+                const name = String(row[2] || "").trim();
+                const amount = cleanAmount(row[5]);
+                if (String(row[4] || "").trim() === "支出" || !name) continue;
+                dataMap.set(name, (dataMap.get(name) || 0) + amount);
+              }
+
+              const noMoney = [];
+              const moneyWrong = [];
+              const nameWrong = [];
+
+              configMap.forEach((exp, name) => {
+                const act = dataMap.get(name);
+                if (act === undefined) {
+                  if (exp !== 0) noMoney.push(`${name}：${exp}`);
+                } else if (Math.abs(act - exp) > 0.01) {
+                  moneyWrong.push(`${name}：${act}`);
+                }
+              });
+
+              dataMap.forEach((act, name) => {
+                if (!configMap.has(name) && !bankList.some(b => b.split('：')[0] === name)) {
+                  nameWrong.push(`${name}：${act}`);
+                }
+              });
+
+              setResults({ noMoney, moneyWrong, nameWrong, bankTransfer: bankList });
+              setView('dashboard');
+            } catch (err) {
+              setErrorMsg("咒语解析失败，请检查卷轴格式。");
+            } finally {
+              setLoading(false);
+            }
+          };
+
+          const GridBox = ({ title, illustration: Illustration, data, icon: Icon, theme }) => (
+            <div className={`flex flex-col rounded-2xl overflow-hidden shadow-2xl border-[3px] ${theme.border} bg-[#fdf6e3] transition-transform active:scale-[0.98]`}>
+              <div className={`px-5 py-3 flex items-center justify-between ${theme.headerBg} border-b-2 ${theme.border}`}>
+                <div className="flex items-center gap-2">
+                  <Icon className="w-5 h-5 text-[#fdf6e3]" />
+                  <h3 className="font-serif font-black text-sm md:text-base tracking-[0.1em] text-[#fdf6e3]">{title}</h3>
+                </div>
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-black/30 text-[#fdf6e3] border border-white/20 shadow-inner">
+                  {data.length}
+                </span>
+              </div>
+              
+              <div className="h-32 md:h-48 relative border-b-2 border-[#d2b48c]/50 bg-black">
+                <Illustration />
+              </div>
+
+              <div className="p-5 flex-grow overflow-y-auto max-h-[160px] md:max-h-[220px] bg-[url('https://www.transparenttextures.com/patterns/parchment.png')]">
+                <div className="text-[#3e2723] text-sm font-bold leading-loose font-serif">
+                  {data.length > 0 ? data.join('， ') : <span className="text-[#8d6e63] font-normal italic opacity-60">此处未见踪迹...</span>}
+                </div>
+              </div>
+            </div>
+          );
+
+          if (view === 'start') {
+            return (
+              <div className="min-h-screen flex flex-col items-center justify-center p-6 font-serif relative overflow-hidden">
+                <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#d4af37] rounded-full mix-blend-screen filter blur-[150px] opacity-10 pointer-events-none"></div>
+
+                <div className="mb-12 text-center relative z-10">
+                  <div className="inline-flex items-center justify-center p-5 rounded-full border-2 border-[#d4af37]/30 bg-black/40 shadow-[0_0_30px_rgba(212,175,55,0.2)] mb-6">
+                    <Coins className="w-14 h-14 text-[#d4af37]" />
+                  </div>
+                  <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-[#fdf6e3] to-[#d4af37] tracking-[0.2em] drop-shadow-lg">
+                    寻宝任务
+                  </h1>
+                  <div className="flex items-center justify-center gap-4 mt-4">
+                    <div className="h-[1px] w-12 bg-gradient-to-r from-transparent to-[#8b5a2b]"></div>
+                    <p className="text-[#8b5a2b] text-xs font-bold uppercase tracking-[0.4em]">Golden Quest</p>
+                    <div className="h-[1px] w-12 bg-gradient-to-l from-transparent to-[#8b5a2b]"></div>
+                  </div>
+                </div>
+
+                <div className="w-full max-w-md bg-[#2a1f1a] rounded-[2rem] p-8 md:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.8)] border-[4px] border-[#4a3320] relative z-10">
+                  <div className="absolute top-4 left-4 w-3 h-3 rounded-full bg-[#d4af37] border border-black shadow-sm"></div>
+                  <div className="absolute top-4 right-4 w-3 h-3 rounded-full bg-[#d4af37] border border-black shadow-sm"></div>
+                  <div className="absolute bottom-4 left-4 w-3 h-3 rounded-full bg-[#d4af37] border border-black shadow-sm"></div>
+                  <div className="absolute bottom-4 right-4 w-3 h-3 rounded-full bg-[#d4af37] border border-black shadow-sm"></div>
+
+                  <div className="space-y-6">
+                    <div className="space-y-4">
+                      <div className="relative">
+                        <input type="file" accept=".xlsx" onChange={(e)=>handleFileChange(e, 'config')} className="hidden" id="f-config" />
+                        <label htmlFor="f-config" className={`flex items-center gap-4 px-5 py-5 rounded-xl border-[2px] transition-all cursor-pointer ${configFiles.config ? 'border-[#d4af37] bg-[#3d2c20]' : 'border-[#4a3320] bg-black/20 hover:border-[#8b5a2b]'}`}>
+                          <Scroll className={`w-7 h-7 ${configFiles.config ? 'text-[#d4af37]' : 'text-[#8b5a2b]'}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-bold text-[#8b5a2b] uppercase tracking-widest mb-1">初始任务 (Config)</p>
+                            <p className={`text-sm font-bold truncate ${configFiles.config ? 'text-[#fdf6e3]' : 'text-[#8b5a2b] opacity-60'}`}>
+                              {configFiles.config ? configFiles.config.name : '放入配置卷轴...'}
+                            </p>
+                          </div>
+                          {configFiles.config && <Sparkles className="w-5 h-5 text-[#d4af37] animate-pulse" />}
+                        </label>
+                      </div>
+
+                      <div className="relative">
+                        <input type="file" accept=".xlsx" onChange={(e)=>handleFileChange(e, 'data')} className="hidden" id="f-data" />
+                        <label htmlFor="f-data" className={`flex items-center gap-4 px-5 py-5 rounded-xl border-[2px] transition-all cursor-pointer ${configFiles.data ? 'border-[#d4af37] bg-[#3d2c20]' : 'border-[#4a3320] bg-black/20 hover:border-[#8b5a2b]'}`}>
+                          <MapIcon className={`w-7 h-7 ${configFiles.data ? 'text-[#d4af37]' : 'text-[#8b5a2b]'}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-bold text-[#8b5a2b] uppercase tracking-widest mb-1">正式任务 (Data)</p>
+                            <p className={`text-sm font-bold truncate ${configFiles.data ? 'text-[#fdf6e3]' : 'text-[#8b5a2b] opacity-60'}`}>
+                              {configFiles.data ? configFiles.data.name : '放入流水秘籍...'}
+                            </p>
+                          </div>
+                          {configFiles.data && <Sparkles className="w-5 h-5 text-[#d4af37] animate-pulse" />}
+                        </label>
+                      </div>
+                    </div>
+
+                    {errorMsg && <p className="text-[#ef4444] text-xs font-bold text-center tracking-widest">{errorMsg}</p>}
+
+                    <button 
+                      onClick={executeQuest}
+                      disabled={loading}
+                      className={`w-full py-5 rounded-xl font-black text-lg tracking-[0.3em] transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 border-b-[4px] active:border-b-0 active:translate-y-[4px] ${
+                        loading
+                          ? 'bg-[#3d2c20] text-[#8b5a2b] border-[#1c140f]' 
+                          : 'bg-gradient-to-r from-[#b8860b] to-[#8b5a2b] text-[#fdf6e3] border-[#5c3a1b] hover:brightness-110'
+                      }`}
+                    >
+                      {loading ? <Loader2 className="animate-spin w-6 h-6" /> : <Sword className="w-6 h-6" />}
+                      开启寻宝
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div className="min-h-screen p-4 md:p-8 font-serif">
+              <div className="max-w-6xl mx-auto h-full flex flex-col">
+                <div className="flex items-center justify-between mb-8">
+                  <button onClick={() => setView('start')} className="p-3 bg-[#2a1f1a] border-2 border-[#4a3320] rounded-xl shadow-md active:scale-90 transition-transform">
+                    <ArrowLeft className="w-6 h-6 text-[#d4af37]" />
+                  </button>
+                  <div className="text-center">
+                    <h2 className="text-2xl md:text-3xl font-black text-[#d4af37] tracking-[0.3em]">寻宝战报</h2>
+                    <div className="h-0.5 w-24 bg-[#8b5a2b] mx-auto mt-2"></div>
+                  </div>
+                  <div className="w-12 h-12 bg-[#2a1f1a] border-2 border-[#4a3320] rounded-xl flex items-center justify-center shadow-md">
+                    <Trophy className="text-[#d4af37] w-6 h-6" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-grow pb-10">
+                  <GridBox 
+                    title="待领赏金 (NO MONEY)" data={results.noMoney} illustration={IllustrationMap} icon={AlertCircle}
+                    theme={{ headerBg: 'bg-[#5c1a1b]', border: 'border-[#5c1a1b]' }}
+                  />
+                  <GridBox 
+                    title="异常战利品 (WRONG AMOUNT)" data={results.moneyWrong} illustration={IllustrationAltar} icon={ShieldAlert}
+                    theme={{ headerBg: 'bg-[#8b5a2b]', border: 'border-[#8b5a2b]' }}
+                  />
+                  <GridBox 
+                    title="神秘访客 (NAME WRONG)" data={results.nameWrong} illustration={IllustrationDragon} icon={UserPlus}
+                    theme={{ headerBg: 'bg-[#1a365d]', border: 'border-[#1a365d]' }}
+                  />
+                  <GridBox 
+                    title="隐秘商行 (BANK TRADE)" data={results.bankTransfer} illustration={IllustrationBank} icon={Landmark}
+                    theme={{ headerBg: 'bg-[#144d32]', border: 'border-[#144d32]' }}
+                  />
+                </div>
+
+                <div className="text-center py-4 text-[#8b5a2b] text-xs font-bold uppercase tracking-widest italic border-t border-[#4a3320]">
+                  世界正在等待你的足迹 · {new Date().toLocaleTimeString()}
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        // --- 渲染到 DOM ---
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
